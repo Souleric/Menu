@@ -988,6 +988,82 @@
     }
 
     .empty-search p { font-size: 14px; }
+
+    /* ─── OPTION SELECTORS ─── */
+    .modal-options {
+      margin-bottom: 16px;
+    }
+
+    .opt-group {
+      margin-bottom: 12px;
+    }
+
+    .opt-group-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .opt-required-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--brand);
+      display: inline-block;
+    }
+
+    .opt-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .opt-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: 50px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.12s;
+      user-select: none;
+    }
+
+    .opt-pill:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+
+    .opt-pill.selected {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .opt-pill-add {
+      font-size: 11px;
+      opacity: 0.75;
+    }
+
+    .opt-pill.selected .opt-pill-add { opacity: 0.85; }
+
+    /* options summary in cart */
+    .cart-item-opts {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -1007,6 +1083,30 @@ const STORE = {
   location: "One City, Subang Jaya",
   openHours: "9am – 10pm daily",
 }
+
+// Global options shown in the item modal for every item.
+// Set priceAdd on a choice to add to the base price (e.g. Large +RM2).
+// To disable options for a specific item, set  options: []  on that item.
+const OPTIONS = [
+  {
+    id: "temp",
+    name: "Temperature",
+    required: true,
+    choices: [
+      { label: "Hot",  priceAdd: 0 },
+      { label: "Iced", priceAdd: 0 },
+    ],
+  },
+  {
+    id: "size",
+    name: "Size",
+    required: true,
+    choices: [
+      { label: "Mid",   priceAdd: 0 },
+      { label: "Large", priceAdd: 2.00 },
+    ],
+  },
+]
 
 const CATEGORIES = [
   {
@@ -1315,6 +1415,7 @@ const CATEGORIES = [
     <div class="modal-body">
       <div class="modal-name" id="modal-name"></div>
       <div class="modal-desc" id="modal-desc"></div>
+      <div id="modal-options" class="modal-options"></div>
       <div class="modal-price-row">
         <div class="modal-price" id="modal-price"></div>
         <div class="modal-price-original" id="modal-price-original"></div>
@@ -1360,9 +1461,10 @@ const CATEGORIES = [
 <!-- ═══════════════════════════════════════ JS ═══ -->
 <script>
 /* ── State ── */
-const cart = {};        // { itemId: { item, qty } }
+const cart = {};        // { cartKey: { item, qty, selections, unitPrice } }
 let activeModal = null; // current item shown in modal
 let modalQty = 1;
+let modalSelections = {}; // { optionId: choiceLabel }
 
 /* ── Boot ── */
 function init() {
@@ -1397,8 +1499,7 @@ function renderCategories() {
 function renderMenu(cats) {
   const body = document.getElementById('menu-body');
   const html = cats.map(cat => {
-    const availableItems = cat.items;
-    const itemsHtml = availableItems.map(item => itemCardHtml(item)).join('');
+    const itemsHtml = cat.items.map(item => itemCardHtml(item)).join('');
     return `
       <div class="menu-section" id="sec-${cat.id}">
         <div class="section-header">
@@ -1443,12 +1544,43 @@ function itemCardHtml(item) {
             <div class="item-price">${STORE.currency} ${price}</div>
             ${origHtml}
           </div>
-          <button class="add-btn" onclick="event.stopPropagation(); ${unavail ? '' : `quickAdd('${item.id}')`}" ${unavail ? 'disabled' : ''}>
+          <button class="add-btn" onclick="event.stopPropagation(); ${unavail ? '' : `openModal('${item.id}')`}" ${unavail ? 'disabled' : ''}>
             <i data-lucide="plus"></i>
           </button>
         </div>
       </div>
     </div>`;
+}
+
+/* ── Options helpers ── */
+function getItemOptions(item) {
+  // item.options = [] means no options; undefined means use global OPTIONS
+  if (Array.isArray(item.options)) return item.options;
+  return OPTIONS;
+}
+
+function defaultSelections(opts) {
+  const sel = {};
+  opts.forEach(opt => { sel[opt.id] = opt.choices[0].label; });
+  return sel;
+}
+
+function selectionsPriceAdd(opts, sel) {
+  let add = 0;
+  opts.forEach(opt => {
+    const choice = opt.choices.find(c => c.label === sel[opt.id]);
+    if (choice) add += choice.priceAdd || 0;
+  });
+  return add;
+}
+
+function cartKey(itemId, sel) {
+  const parts = Object.entries(sel).map(([k, v]) => `${k}:${v}`).join('|');
+  return `${itemId}__${parts}`;
+}
+
+function selectionsLabel(sel) {
+  return Object.values(sel).join(', ');
 }
 
 /* ── Modal ── */
@@ -1457,12 +1589,15 @@ function openModal(itemId) {
   if (!item) return;
   activeModal = item;
   modalQty = 1;
+  const opts = getItemOptions(item);
+  modalSelections = defaultSelections(opts);
+
   document.getElementById('modal-name').textContent = item.name;
   document.getElementById('modal-desc').textContent = item.desc || '';
-  document.getElementById('modal-price').textContent = `${STORE.currency} ${fmt(item.price)}`;
+  document.getElementById('modal-qty').textContent = modalQty;
+
   const origEl = document.getElementById('modal-price-original');
   origEl.textContent = item.originalPrice ? `${STORE.currency} ${fmt(item.originalPrice)}` : '';
-  document.getElementById('modal-qty').textContent = modalQty;
 
   const wrap = document.getElementById('modal-img-wrap');
   if (item.image) {
@@ -1473,9 +1608,47 @@ function openModal(itemId) {
       <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>`;
   }
 
-  updateModalBtn();
+  renderModalOptions(opts);
+  updateModalPrice();
   document.getElementById('modal-overlay').classList.add('open');
   lucide.createIcons();
+}
+
+function renderModalOptions(opts) {
+  const container = document.getElementById('modal-options');
+  if (!opts.length) { container.innerHTML = ''; return; }
+  container.innerHTML = opts.map(opt => `
+    <div class="opt-group">
+      <div class="opt-group-label">
+        ${opt.name}
+        ${opt.required ? '<span class="opt-required-dot"></span>' : ''}
+      </div>
+      <div class="opt-pills">
+        ${opt.choices.map(c => `
+          <button class="opt-pill${modalSelections[opt.id] === c.label ? ' selected' : ''}"
+            onclick="selectOption('${opt.id}', '${c.label}')">
+            ${c.label}
+            ${c.priceAdd ? `<span class="opt-pill-add">+${STORE.currency}${fmt(c.priceAdd)}</span>` : ''}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function selectOption(optId, label) {
+  modalSelections[optId] = label;
+  const opts = getItemOptions(activeModal);
+  // re-render only the pills
+  renderModalOptions(opts);
+  updateModalPrice();
+}
+
+function updateModalPrice() {
+  const opts = getItemOptions(activeModal);
+  const priceAdd = selectionsPriceAdd(opts, modalSelections);
+  const unitPrice = activeModal.price + priceAdd;
+  const total = fmt(unitPrice * modalQty);
+  document.getElementById('modal-price').textContent = `${STORE.currency} ${fmt(unitPrice)}`;
+  document.getElementById('modal-add-label').textContent = `Add to Order — ${STORE.currency} ${total}`;
 }
 
 function closeModal(e) {
@@ -1487,31 +1660,32 @@ function closeModal(e) {
 function changeQty(delta) {
   modalQty = Math.max(1, modalQty + delta);
   document.getElementById('modal-qty').textContent = modalQty;
-  updateModalBtn();
-}
-
-function updateModalBtn() {
-  const total = fmt(activeModal.price * modalQty);
-  document.getElementById('modal-add-label').textContent = `Add to Order — ${STORE.currency} ${total}`;
+  updateModalPrice();
 }
 
 function addFromModal() {
-  addToCart(activeModal, modalQty);
+  const opts = getItemOptions(activeModal);
+  // validate all required options selected
+  for (const opt of opts) {
+    if (opt.required && !modalSelections[opt.id]) {
+      alert(`Please select ${opt.name}`);
+      return;
+    }
+  }
+  const priceAdd = selectionsPriceAdd(opts, modalSelections);
+  const unitPrice = activeModal.price + priceAdd;
+  addToCart(activeModal, modalQty, { ...modalSelections }, unitPrice);
   document.getElementById('modal-overlay').classList.remove('open');
   activeModal = null;
 }
 
-function quickAdd(itemId) {
-  const item = findItem(itemId);
-  if (item) addToCart(item, 1);
-}
-
 /* ── Cart ── */
-function addToCart(item, qty) {
-  if (cart[item.id]) {
-    cart[item.id].qty += qty;
+function addToCart(item, qty, selections, unitPrice) {
+  const key = cartKey(item.id, selections);
+  if (cart[key]) {
+    cart[key].qty += qty;
   } else {
-    cart[item.id] = { item, qty };
+    cart[key] = { item, qty, selections, unitPrice };
   }
   updateCartUI();
 }
@@ -1520,16 +1694,10 @@ function updateCartUI() {
   const total = cartTotal();
   const count = cartCount();
   const bar = document.getElementById('cart-bar');
-  const countEl = document.getElementById('cart-count');
-  const totalEl = document.getElementById('cart-bar-total');
-
-  countEl.textContent = count;
-  totalEl.textContent = `${STORE.currency} ${fmt(total)}`;
+  document.getElementById('cart-count').textContent = count;
+  document.getElementById('cart-bar-total').textContent = `${STORE.currency} ${fmt(total)}`;
   bar.classList.toggle('visible', count > 0);
-
-  if (document.getElementById('cart-panel').classList.contains('open')) {
-    renderCartPanel();
-  }
+  if (document.getElementById('cart-panel').classList.contains('open')) renderCartPanel();
 }
 
 function openCart() {
@@ -1546,9 +1714,9 @@ function closeCart() {
 function renderCartPanel() {
   const list = document.getElementById('cart-items-list');
   const footer = document.getElementById('cart-footer');
-  const items = Object.values(cart);
+  const entries = Object.entries(cart);
 
-  if (items.length === 0) {
+  if (entries.length === 0) {
     list.innerHTML = `<div class="cart-empty">
       <i data-lucide="shopping-bag"></i>
       <p>Your order is empty.<br>Add something delicious!</p>
@@ -1558,7 +1726,7 @@ function renderCartPanel() {
     return;
   }
 
-  list.innerHTML = items.map(({ item, qty }) => `
+  list.innerHTML = entries.map(([key, { item, qty, selections, unitPrice }]) => `
     <div class="cart-item">
       ${item.image
         ? `<img class="cart-item-img" src="${item.image}" alt="${item.name}" />`
@@ -1566,12 +1734,13 @@ function renderCartPanel() {
       }
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
-        <div class="cart-item-price">${STORE.currency} ${fmt(item.price * qty)}</div>
+        ${selections && Object.keys(selections).length ? `<div class="cart-item-opts">${selectionsLabel(selections)}</div>` : ''}
+        <div class="cart-item-price">${STORE.currency} ${fmt(unitPrice * qty)}</div>
       </div>
       <div class="cart-item-ctrl">
-        <button class="cart-qty-btn" onclick="cartAdjust('${item.id}', -1)"><i data-lucide="minus"></i></button>
+        <button class="cart-qty-btn" onclick="cartAdjust('${key}', -1)"><i data-lucide="minus"></i></button>
         <span class="cart-qty-num">${qty}</span>
-        <button class="cart-qty-btn" onclick="cartAdjust('${item.id}', 1)"><i data-lucide="plus"></i></button>
+        <button class="cart-qty-btn" onclick="cartAdjust('${key}', 1)"><i data-lucide="plus"></i></button>
       </div>
     </div>`).join('');
 
@@ -1580,16 +1749,16 @@ function renderCartPanel() {
   lucide.createIcons();
 }
 
-function cartAdjust(itemId, delta) {
-  if (!cart[itemId]) return;
-  cart[itemId].qty += delta;
-  if (cart[itemId].qty <= 0) delete cart[itemId];
+function cartAdjust(key, delta) {
+  if (!cart[key]) return;
+  cart[key].qty += delta;
+  if (cart[key].qty <= 0) delete cart[key];
   updateCartUI();
   renderCartPanel();
 }
 
 function cartTotal() {
-  return Object.values(cart).reduce((sum, { item, qty }) => sum + item.price * qty, 0);
+  return Object.values(cart).reduce((sum, { unitPrice, qty }) => sum + unitPrice * qty, 0);
 }
 
 function cartCount() {
@@ -1598,9 +1767,10 @@ function cartCount() {
 
 /* ── Checkout via WhatsApp ── */
 function checkoutWhatsApp() {
-  const lines = Object.values(cart).map(({ item, qty }) =>
-    `- ${item.name} x${qty} = ${STORE.currency} ${fmt(item.price * qty)}`
-  );
+  const lines = Object.values(cart).map(({ item, qty, selections, unitPrice }) => {
+    const opts = selections && Object.keys(selections).length ? ` (${selectionsLabel(selections)})` : '';
+    return `- ${item.name}${opts} x${qty} = ${STORE.currency} ${fmt(unitPrice * qty)}`;
+  });
   const total = `*Total: ${STORE.currency} ${fmt(cartTotal())}*`;
   const msg = `Hi! I'd like to place an order from ${STORE.name}:\n\n${lines.join('\n')}\n\n${total}`;
   window.open(`https://wa.me/${STORE.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
