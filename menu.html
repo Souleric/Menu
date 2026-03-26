@@ -1865,13 +1865,29 @@ function init() {
 }
 
 /* ── Category nav ── */
+let activeFilter = 'all'; // 'all' or a category id
+
 function renderCategories() {
   const nav = document.getElementById('cat-nav');
-  nav.innerHTML = CATEGORIES.map((cat, i) =>
-    `<button class="cat-btn${i === 0 ? ' active' : ''}" data-id="${cat.id}" onclick="scrollToSection('${cat.id}')">
+  const allBtn = `<button class="cat-btn active" data-id="all" onclick="filterCategory('all')">
+    <i data-lucide="layout-grid"></i>All Items
+  </button>`;
+  const catBtns = CATEGORIES.map(cat =>
+    `<button class="cat-btn" data-id="${cat.id}" onclick="filterCategory('${cat.id}')">
       <i data-lucide="${cat.icon}"></i>${cat.name}
     </button>`
   ).join('');
+  nav.innerHTML = allBtn + catBtns;
+}
+
+function filterCategory(id) {
+  activeFilter = id;
+  document.querySelectorAll('.cat-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.id === id)
+  );
+  const cats = id === 'all' ? CATEGORIES : CATEGORIES.filter(c => c.id === id);
+  renderMenu(cats);
+  document.getElementById('main-scroll').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ── Menu render ── */
@@ -2222,7 +2238,7 @@ Please confirm my order. Thank you!`;
 function handleSearch(query) {
   const q = query.toLowerCase().trim();
   if (!q) {
-    renderMenu(CATEGORIES);
+    filterCategory(activeFilter);
     document.getElementById('cat-nav-wrap').style.display = '';
     return;
   }
@@ -2251,9 +2267,10 @@ function setupScrollSpy() {
 }
 
 function onScroll() {
+  if (activeFilter !== 'all') return;
   const scroll = document.getElementById('main-scroll');
   const offset = scroll.scrollTop + 120;
-  let active = CATEGORIES[0].id;
+  let active = 'all';
   CATEGORIES.forEach(cat => {
     const el = document.getElementById('sec-' + cat.id);
     if (el && el.offsetTop <= offset) active = cat.id;
