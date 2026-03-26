@@ -29,13 +29,13 @@
       --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
     }
 
-    html { scroll-behavior: smooth; }
+    html, body { height: 100%; }
 
     body {
       font-family: 'Inter', sans-serif;
       background: var(--bg);
       color: var(--text-primary);
-      height: 100vh;
+      height: 100svh; /* small viewport height — excludes mobile browser chrome */
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -119,7 +119,12 @@
     .main-scroll {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding-top: var(--header-h);
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: none;
+      scroll-behavior: smooth;
+      will-change: scroll-position;
     }
 
     /* ─── HERO ─── */
