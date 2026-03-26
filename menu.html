@@ -989,6 +989,218 @@
 
     .empty-search p { font-size: 14px; }
 
+    /* ─── RECEIPT PANEL ─── */
+    .receipt-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 220;
+      display: none;
+    }
+    .receipt-overlay.open { display: block; }
+
+    .receipt-panel {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--bg);
+      border-radius: 20px 20px 0 0;
+      z-index: 230;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .receipt-panel.open { transform: translateY(0); }
+
+    @media (min-width: 520px) {
+      .receipt-panel {
+        left: 50%; right: auto;
+        transform: translateX(-50%) translateY(100%);
+        width: 440px;
+        border-radius: 20px 20px 0 0;
+      }
+      .receipt-panel.open { transform: translateX(-50%) translateY(0); }
+    }
+
+    .receipt-header {
+      padding: 16px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .receipt-header-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .receipt-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 8px;
+    }
+
+    /* the receipt card itself */
+    .receipt-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .receipt-top {
+      background: var(--brand);
+      color: #fff;
+      padding: 18px 20px 14px;
+      text-align: center;
+    }
+
+    .receipt-store-name {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      margin-bottom: 2px;
+    }
+
+    .receipt-datetime {
+      font-size: 11px;
+      opacity: 0.75;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .receipt-dash {
+      border: none;
+      border-top: 1.5px dashed var(--border);
+      margin: 0;
+    }
+
+    .receipt-items {
+      padding: 14px 18px;
+    }
+
+    .receipt-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .receipt-item:last-child { border-bottom: none; }
+
+    .receipt-item-left { flex: 1; min-width: 0; }
+
+    .receipt-item-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+    }
+
+    .receipt-item-opts {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .receipt-item-qty {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 3px;
+    }
+
+    .receipt-item-price {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      padding-top: 1px;
+    }
+
+    .receipt-totals {
+      padding: 10px 18px 14px;
+      background: #fafbfc;
+      border-top: 1.5px dashed var(--border);
+    }
+
+    .receipt-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+    }
+
+    .receipt-total-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .receipt-total-val {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .receipt-grand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1.5px solid var(--border);
+    }
+
+    .receipt-grand-label {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .receipt-grand-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--brand);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .receipt-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 10px 18px 14px;
+    }
+
+    .receipt-footer {
+      padding: 14px 16px 20px;
+      flex-shrink: 0;
+    }
+
+    .receipt-send-btn {
+      width: 100%;
+      padding: 15px;
+      background: #25D366;
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .receipt-send-btn:hover { background: #1fb456; }
+    .receipt-send-btn:active { transform: scale(0.98); }
+    .receipt-send-btn i { width: 18px; height: 18px; }
+
     /* ─── OPTION SELECTORS ─── */
     .modal-options {
       margin-bottom: 16px;
@@ -1078,7 +1290,7 @@ const STORE = {
   logo: null,                         // URL to logo image, or null
   coverImage: null,                   // URL to hero cover image, or null
   currency: "RM",
-  whatsapp: "60115915779",           // without + sign
+  whatsapp: "60176206785",           // without + sign
   instagram: "9palacecoffee",
   location: "One City, Subang Jaya",
   openHours: "9am – 10pm daily",
@@ -1451,9 +1663,38 @@ const CATEGORIES = [
       <span class="cart-total-label">Total</span>
       <span class="cart-total-value" id="cart-total"></span>
     </div>
-    <button class="checkout-btn" onclick="checkoutWhatsApp()">
+    <button class="checkout-btn" onclick="openReceipt()">
+      <i data-lucide="receipt-text"></i>
+      Review &amp; Order
+    </button>
+  </div>
+</div>
+
+<!-- Receipt panel -->
+<div class="receipt-overlay" id="receipt-overlay" onclick="closeReceipt()"></div>
+<div class="receipt-panel" id="receipt-panel">
+  <div class="receipt-header">
+    <span class="receipt-header-title">Order Summary</span>
+    <button class="icon-btn" style="background:var(--border);color:var(--text-primary)" onclick="closeReceipt()">
+      <i data-lucide="x"></i>
+    </button>
+  </div>
+  <div class="receipt-scroll">
+    <div class="receipt-card">
+      <div class="receipt-top">
+        <div class="receipt-store-name" id="receipt-store-name"></div>
+        <div class="receipt-datetime" id="receipt-datetime"></div>
+      </div>
+      <hr class="receipt-dash" />
+      <div class="receipt-items" id="receipt-items"></div>
+      <div class="receipt-totals" id="receipt-totals"></div>
+      <div class="receipt-note">Please review your order before sending.</div>
+    </div>
+  </div>
+  <div class="receipt-footer">
+    <button class="receipt-send-btn" onclick="sendToWhatsApp()">
       <i data-lucide="message-circle"></i>
-      Order via WhatsApp
+      Send Order via WhatsApp
     </button>
   </div>
 </div>
@@ -1765,14 +2006,77 @@ function cartCount() {
   return Object.values(cart).reduce((sum, { qty }) => sum + qty, 0);
 }
 
-/* ── Checkout via WhatsApp ── */
-function checkoutWhatsApp() {
+/* ── Receipt ── */
+function openReceipt() {
+  closeCart();
+
+  // populate store name + datetime
+  document.getElementById('receipt-store-name').textContent = STORE.name;
+  const now = new Date();
+  document.getElementById('receipt-datetime').textContent =
+    now.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) + '  ' +
+    now.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+
+  // items
+  const entries = Object.values(cart);
+  document.getElementById('receipt-items').innerHTML = entries.map(({ item, qty, selections, unitPrice }) => {
+    const opts = selections && Object.keys(selections).length
+      ? `<div class="receipt-item-opts">${selectionsLabel(selections)}</div>` : '';
+    return `
+      <div class="receipt-item">
+        <div class="receipt-item-left">
+          <div class="receipt-item-name">${item.name}</div>
+          ${opts}
+          <div class="receipt-item-qty">${STORE.currency} ${fmt(unitPrice)} × ${qty}</div>
+        </div>
+        <div class="receipt-item-price">${STORE.currency} ${fmt(unitPrice * qty)}</div>
+      </div>`;
+  }).join('');
+
+  // totals
+  const subtotal = cartTotal();
+  document.getElementById('receipt-totals').innerHTML = `
+    <div class="receipt-total-row">
+      <span class="receipt-total-label">Subtotal (${cartCount()} item${cartCount() !== 1 ? 's' : ''})</span>
+      <span class="receipt-total-val">${STORE.currency} ${fmt(subtotal)}</span>
+    </div>
+    <div class="receipt-grand-row">
+      <span class="receipt-grand-label">Total</span>
+      <span class="receipt-grand-val">${STORE.currency} ${fmt(subtotal)}</span>
+    </div>`;
+
+  document.getElementById('receipt-overlay').classList.add('open');
+  document.getElementById('receipt-panel').classList.add('open');
+  lucide.createIcons();
+}
+
+function closeReceipt() {
+  document.getElementById('receipt-overlay').classList.remove('open');
+  document.getElementById('receipt-panel').classList.remove('open');
+}
+
+function sendToWhatsApp() {
   const lines = Object.values(cart).map(({ item, qty, selections, unitPrice }) => {
     const opts = selections && Object.keys(selections).length ? ` (${selectionsLabel(selections)})` : '';
-    return `- ${item.name}${opts} x${qty} = ${STORE.currency} ${fmt(unitPrice * qty)}`;
+    return `• ${item.name}${opts}\n  ${STORE.currency} ${fmt(unitPrice)} × ${qty} = ${STORE.currency} ${fmt(unitPrice * qty)}`;
   });
-  const total = `*Total: ${STORE.currency} ${fmt(cartTotal())}*`;
-  const msg = `Hi! I'd like to place an order from ${STORE.name}:\n\n${lines.join('\n')}\n\n${total}`;
+  const total = cartTotal();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+  const msg =
+`==============================
+ORDER — ${STORE.name}
+${dateStr}, ${timeStr}
+==============================
+
+${lines.join('\n\n')}
+
+------------------------------
+Total: *${STORE.currency} ${fmt(total)}*
+==============================
+
+Please confirm my order. Thank you!`;
   window.open(`https://wa.me/${STORE.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
