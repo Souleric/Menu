@@ -144,11 +144,9 @@
       flex: 1;
       overflow-y: auto;
       overflow-x: hidden;
-      padding-top: var(--header-h);
+      padding-top: calc(var(--header-h) + var(--cat-h));
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: none;
-      scroll-behavior: smooth;
-      will-change: scroll-position;
     }
 
     /* ─── HERO ─── */
@@ -223,11 +221,14 @@
 
     /* ─── CATEGORY NAV ─── */
     .cat-nav-wrap {
-      position: sticky;
+      position: fixed;
       top: var(--header-h);
+      left: 0;
+      right: 0;
       z-index: 90;
       background: #fff;
       border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
     }
 
     .cat-nav {
@@ -2053,6 +2054,11 @@ const CATEGORIES = [
   </div>
 </header>
 
+<!-- Category nav — fixed below header, outside scroll container -->
+<div class="cat-nav-wrap" id="cat-nav-wrap">
+  <nav class="cat-nav" id="cat-nav"></nav>
+</div>
+
 <div class="main-scroll" id="main-scroll">
 
   <!-- Hero -->
@@ -2083,11 +2089,6 @@ const CATEGORIES = [
       <i data-lucide="search"></i>
       <input class="search-input" type="text" placeholder="Search menu..." id="search-input" oninput="handleSearch(this.value)" />
     </div>
-  </div>
-
-  <!-- Category nav -->
-  <div class="cat-nav-wrap">
-    <nav class="cat-nav" id="cat-nav"></nav>
   </div>
 
   <!-- Menu body -->
