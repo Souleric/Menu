@@ -1988,7 +1988,8 @@ const CATEGORIES = [
       </div>
       <div class="delivery-form" id="delivery-form">
         <input type="text" id="delivery-addr" class="delivery-addr-input"
-          placeholder="Enter your full delivery address" />
+          placeholder="Enter your full delivery address"
+          autocomplete="off" spellcheck="false" />
         <button class="delivery-quote-btn" id="delivery-quote-btn" onclick="getDeliveryQuote()">
           <i data-lucide="map-pin"></i> Get Delivery Quote
         </button>
@@ -2392,7 +2393,7 @@ function openReceipt() {
   deliveryMode = 'pickup';
   deliveryQuote = null;
   deliveryCoords = null;
-  autocomplete = null;
+  // do NOT reset autocomplete — reattaching it to the same input causes freezes
   document.getElementById('btn-pickup').classList.add('active');
   document.getElementById('btn-delivery').classList.remove('active');
   document.getElementById('delivery-form').style.display = 'none';
