@@ -10,16 +10,15 @@
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
   <script src="https://js.stripe.com/v3/"></script>
   <style>
-    /* Custom address suggestions dropdown — rendered on body, position:fixed */
-    .delivery-addr-wrap { position: relative; }
+    /* Address suggestions — absolute inside receipt-panel, outside receipt-scroll */
     .delivery-suggestions {
-      position: fixed;
+      position: absolute;
       background: #fff;
       border: 1.5px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      z-index: 99999;
+      z-index: 10;
     }
     .delivery-suggestion {
       padding: 11px 12px;
@@ -1459,6 +1458,7 @@
       border-radius: 20px 20px 0 0;
       z-index: 250;
       max-height: 90vh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       transform: translateY(100%);
@@ -2201,6 +2201,9 @@ const CATEGORIES = [
       </div>
     </div>
   </div>
+  <!-- Suggestions: inside receipt-panel, outside receipt-scroll so overflow isn't clipped -->
+  <div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
+
   <div class="receipt-footer">
     <button class="receipt-pay-btn" onclick="openPaymentPanel()">
       <i data-lucide="credit-card"></i>
@@ -2220,9 +2223,6 @@ const CATEGORIES = [
   </div>
   <div class="payment-panel-body" id="payment-panel-body"></div>
 </div>
-
-<!-- Address suggestions — must be outside receipt panel (transform breaks position:fixed inside it) -->
-<div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
 
 <!-- ═══════════════════════════════════════ JS ═══ -->
 <script>
@@ -2245,13 +2245,20 @@ function onAddrInput(val) {
   addrDebounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 400);
 }
 
-function showSuggestionMsg(msg) {
+function suggestionPos() {
   const input = document.getElementById('delivery-addr');
-  const rect = input.getBoundingClientRect();
+  const panel = document.getElementById('receipt-panel');
+  const ir = input.getBoundingClientRect();
+  const pr = panel.getBoundingClientRect();
+  return { left: ir.left - pr.left, top: ir.bottom - pr.top + 4, width: ir.width };
+}
+
+function showSuggestionMsg(msg) {
+  const { left, top, width } = suggestionPos();
   const list = document.getElementById('delivery-suggestions');
-  list.style.left  = rect.left + 'px';
-  list.style.top   = (rect.bottom + 4) + 'px';
-  list.style.width = rect.width + 'px';
+  list.style.left  = left + 'px';
+  list.style.top   = top + 'px';
+  list.style.width = width + 'px';
   list.innerHTML = `<div class="delivery-suggestion" style="color:var(--text-muted);font-style:italic">${msg}</div>`;
   list.style.display = 'block';
 }
@@ -2268,12 +2275,11 @@ async function fetchSuggestions(query) {
     if (data.error) { showSuggestionMsg(data.error); return; }
     if (!data.suggestions || !data.suggestions.length) { showSuggestionMsg('No results found.'); return; }
 
-    const input = document.getElementById('delivery-addr');
-    const rect = input.getBoundingClientRect();
+    const { left, top, width } = suggestionPos();
     const list = document.getElementById('delivery-suggestions');
-    list.style.left  = rect.left + 'px';
-    list.style.top   = (rect.bottom + 4) + 'px';
-    list.style.width = rect.width + 'px';
+    list.style.left  = left + 'px';
+    list.style.top   = top + 'px';
+    list.style.width = width + 'px';
     list.innerHTML = data.suggestions.map(s =>
       `<div class="delivery-suggestion" onclick="selectSuggestion('${s.placeId}','${s.description.replace(/'/g,"\\'")}')">
         ${s.description}
