@@ -34,31 +34,41 @@ export default {
     }
 
     try {
-      const { address } = await request.json();
+      const { address, lat, lng } = await request.json();
       if (!address || address.trim().length < 5) {
         throw new Error('Please enter a valid delivery address.');
       }
 
-      // Geocode customer address
-      const coords = await geocode(address.trim());
+      // Use provided coordinates (from Google Places) or fall back to geocoding
+      let dropLat, dropLng;
+      if (lat && lng) {
+        dropLat = parseFloat(lat).toFixed(6);
+        dropLng = parseFloat(lng).toFixed(6);
+      } else {
+        const coords = await geocode(address.trim());
+        dropLat = parseFloat(coords.lat).toFixed(6);
+        dropLng = parseFloat(coords.lng).toFixed(6);
+      }
 
-      // Build Lalamove quotation request
       const path = '/v3/quotations';
       const timestamp = Date.now().toString();
+      // scheduleAt must be a future RFC3339 time (5 min from now)
+      const scheduleAt = new Date(Date.now() + 5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '+00:00');
+
       const bodyObj = {
         serviceType: 'MOTORCYCLE',
         language: 'en_MY',
+        scheduleAt,
         stops: [
           {
             coordinates: { lat: env.STORE_LAT, lng: env.STORE_LNG },
             address: env.STORE_ADDRESS,
           },
           {
-            coordinates: { lat: coords.lat, lng: coords.lng },
+            coordinates: { lat: dropLat, lng: dropLng },
             address: address.trim(),
           },
         ],
-        isRouteOptimized: false,
       };
       const bodyStr = JSON.stringify(bodyObj);
       const signature = await hmacSign(env.LALAMOVE_API_SECRET, 'POST', path, bodyStr, timestamp);
@@ -77,7 +87,8 @@ export default {
       const llData = await llRes.json();
 
       if (!llRes.ok) {
-        const errMsg = llData?.message || llData?.details?.[0]?.message || 'Lalamove API error';
+        // Return full error detail for easier debugging
+        const errMsg = llData?.message || llData?.details?.[0]?.message || JSON.stringify(llData);
         throw new Error(errMsg);
       }
 

@@ -8,6 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady&loading=async" async defer></script>
+  <style>
+    /* Google Maps autocomplete dropdown above receipt panel */
+    .pac-container { z-index: 9999 !important; font-family: 'Inter', sans-serif; }
+  </style>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2010,6 +2015,35 @@ let modalSelections = {}; // { optionId: choiceLabel }
 // Delivery state
 let deliveryMode = 'pickup'; // 'pickup' | 'delivery'
 let deliveryQuote = null;    // { price, priceFormatted, eta, distanceKm }
+let deliveryCoords = null;   // { lat, lng } from Google Places
+let autocomplete = null;
+let mapsReady = false;
+
+function onGoogleMapsReady() {
+  mapsReady = true;
+}
+
+function initAutocomplete() {
+  if (!mapsReady || autocomplete) return;
+  const input = document.getElementById('delivery-addr');
+  autocomplete = new google.maps.places.Autocomplete(input, {
+    componentRestrictions: { country: 'my' },
+    fields: ['formatted_address', 'geometry'],
+  });
+  autocomplete.addListener('place_changed', () => {
+    const place = autocomplete.getPlace();
+    if (place.geometry) {
+      deliveryCoords = {
+        lat: place.geometry.location.lat().toFixed(6),
+        lng: place.geometry.location.lng().toFixed(6),
+      };
+      // Update input to full formatted address
+      document.getElementById('delivery-addr').value = place.formatted_address;
+    } else {
+      deliveryCoords = null;
+    }
+  });
+}
 
 /* ── Boot ── */
 function init() {
@@ -2357,6 +2391,8 @@ function openReceipt() {
   // Reset delivery state
   deliveryMode = 'pickup';
   deliveryQuote = null;
+  deliveryCoords = null;
+  autocomplete = null;
   document.getElementById('btn-pickup').classList.add('active');
   document.getElementById('btn-delivery').classList.remove('active');
   document.getElementById('delivery-form').style.display = 'none';
@@ -2405,8 +2441,11 @@ function setDeliveryMode(mode) {
   document.getElementById('btn-pickup').classList.toggle('active', mode === 'pickup');
   document.getElementById('btn-delivery').classList.toggle('active', mode === 'delivery');
   document.getElementById('delivery-form').style.display = mode === 'delivery' ? 'block' : 'none';
-  if (mode === 'pickup') {
+  if (mode === 'delivery') {
+    initAutocomplete();
+  } else {
     deliveryQuote = null;
+    deliveryCoords = null;
     const resultEl = document.getElementById('delivery-result');
     resultEl.style.display = 'none';
     resultEl.className = 'delivery-result';
@@ -2430,11 +2469,21 @@ async function getDeliveryQuote() {
   resultEl.className = 'delivery-result';
   lucide.createIcons();
 
+  if (!deliveryCoords) {
+    resultEl.className = 'delivery-result error';
+    resultEl.textContent = 'Please select an address from the dropdown suggestions.';
+    resultEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="map-pin"></i> Get Delivery Quote';
+    lucide.createIcons();
+    return;
+  }
+
   try {
     const res = await fetch(STORE.workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, lat: deliveryCoords.lat, lng: deliveryCoords.lng }),
     });
     const data = await res.json();
 
