@@ -10,8 +10,25 @@
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady&loading=async" async defer></script>
   <style>
-    /* Google Maps autocomplete dropdown above receipt panel */
-    .pac-container { z-index: 9999 !important; font-family: 'Inter', sans-serif; }
+    /* Custom address suggestions dropdown */
+    .delivery-suggestions {
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .delivery-suggestion {
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.4;
+    }
+    .delivery-suggestion:last-child { border-bottom: none; }
+    .delivery-suggestion:active { background: var(--brand-light); }
   </style>
 
   <style>
@@ -1989,7 +2006,8 @@ const CATEGORIES = [
       <div class="delivery-form" id="delivery-form">
         <input type="text" id="delivery-addr" class="delivery-addr-input"
           placeholder="Enter your full delivery address"
-          autocomplete="off" spellcheck="false" />
+          autocomplete="off" spellcheck="false" oninput="onAddrInput(this.value)" />
+        <div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
         <button class="delivery-quote-btn" id="delivery-quote-btn" onclick="getDeliveryQuote()">
           <i data-lucide="map-pin"></i> Get Delivery Quote
         </button>
@@ -2017,34 +2035,69 @@ let modalSelections = {}; // { optionId: choiceLabel }
 let deliveryMode = 'pickup'; // 'pickup' | 'delivery'
 let deliveryQuote = null;    // { price, priceFormatted, eta, distanceKm }
 let deliveryCoords = null;   // { lat, lng } from Google Places
-let autocomplete = null;
 let mapsReady = false;
+let acService = null;
+let sessionToken = null;
+let addrDebounceTimer = null;
 
 function onGoogleMapsReady() {
   mapsReady = true;
+  acService = new google.maps.places.AutocompleteService();
 }
 
-function initAutocomplete() {
-  if (!mapsReady || autocomplete) return;
-  const input = document.getElementById('delivery-addr');
-  autocomplete = new google.maps.places.Autocomplete(input, {
-    componentRestrictions: { country: 'my' },
-    fields: ['formatted_address', 'geometry'],
-  });
-  autocomplete.addListener('place_changed', () => {
-    const place = autocomplete.getPlace();
-    if (place.geometry) {
-      deliveryCoords = {
-        lat: place.geometry.location.lat().toFixed(6),
-        lng: place.geometry.location.lng().toFixed(6),
-      };
-      // Update input to full formatted address
-      document.getElementById('delivery-addr').value = place.formatted_address;
-    } else {
-      deliveryCoords = null;
-    }
-  });
+function onAddrInput(val) {
+  clearTimeout(addrDebounceTimer);
+  deliveryCoords = null; // clear coords when user edits
+  if (val.trim().length < 3) { hideSuggestions(); return; }
+  addrDebounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 350);
 }
+
+function fetchSuggestions(query) {
+  if (!mapsReady || !acService) return;
+  if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
+  acService.getPlacePredictions(
+    { input: query, componentRestrictions: { country: 'my' }, sessionToken },
+    (predictions, status) => {
+      if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
+        hideSuggestions(); return;
+      }
+      const list = document.getElementById('delivery-suggestions');
+      list.innerHTML = predictions.slice(0, 5).map(p =>
+        `<div class="delivery-suggestion" onclick="selectSuggestion('${p.place_id}','${p.description.replace(/'/g,"\\'")}')">
+          ${p.description}
+        </div>`
+      ).join('');
+      list.style.display = 'block';
+    }
+  );
+}
+
+function selectSuggestion(placeId, description) {
+  hideSuggestions();
+  document.getElementById('delivery-addr').value = description;
+  const svc = new google.maps.places.PlacesService(document.createElement('div'));
+  svc.getDetails(
+    { placeId, fields: ['geometry', 'formatted_address'], sessionToken },
+    (place, status) => {
+      sessionToken = null;
+      if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
+        deliveryCoords = {
+          lat: place.geometry.location.lat().toFixed(6),
+          lng: place.geometry.location.lng().toFixed(6),
+        };
+        document.getElementById('delivery-addr').value = place.formatted_address;
+      }
+    }
+  );
+}
+
+function hideSuggestions() {
+  const list = document.getElementById('delivery-suggestions');
+  list.style.display = 'none';
+  list.innerHTML = '';
+}
+
+function initAutocomplete() { /* no-op — service initialized in onGoogleMapsReady */ }
 
 /* ── Boot ── */
 function init() {
@@ -2433,6 +2486,7 @@ function openReceipt() {
 }
 
 function closeReceipt() {
+  hideSuggestions();
   document.getElementById('receipt-overlay').classList.remove('open');
   document.getElementById('receipt-panel').classList.remove('open');
 }
