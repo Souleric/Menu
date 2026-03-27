@@ -11,16 +11,22 @@
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady&loading=async" async defer></script>
   <style>
     /* Custom address suggestions dropdown */
+    .delivery-addr-wrap {
+      position: relative;
+    }
     .delivery-suggestions {
+      position: absolute;
+      left: 0; right: 0;
+      top: calc(100% + 4px);
       background: #fff;
       border: 1.5px solid var(--border);
       border-radius: 8px;
-      margin-bottom: 8px;
       overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      z-index: 9999;
     }
     .delivery-suggestion {
-      padding: 10px 12px;
+      padding: 11px 12px;
       font-size: 13px;
       color: var(--text-primary);
       cursor: pointer;
@@ -2004,10 +2010,12 @@ const CATEGORIES = [
         </button>
       </div>
       <div class="delivery-form" id="delivery-form">
-        <input type="text" id="delivery-addr" class="delivery-addr-input"
-          placeholder="Enter your full delivery address"
-          autocomplete="off" spellcheck="false" oninput="onAddrInput(this.value)" />
-        <div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
+        <div class="delivery-addr-wrap">
+          <input type="text" id="delivery-addr" class="delivery-addr-input"
+            placeholder="Enter your full delivery address"
+            autocomplete="off" spellcheck="false" oninput="onAddrInput(this.value)" />
+          <div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
+        </div>
         <button class="delivery-quote-btn" id="delivery-quote-btn" onclick="getDeliveryQuote()">
           <i data-lucide="map-pin"></i> Get Delivery Quote
         </button>
