@@ -2089,28 +2089,33 @@ function fetchSuggestions(query) {
     showSuggestionMsg('Maps not ready — try again.');
     return;
   }
-  if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
-  acService.getPlacePredictions(
-    { input: query, componentRestrictions: { country: 'my' }, sessionToken },
-    (predictions, status) => {
-      if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
-        showSuggestionMsg('No results (' + status + '). Check Places API is enabled + billing active.');
-        return;
+  try {
+    if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
+    showSuggestionMsg('Searching…');
+    acService.getPlacePredictions(
+      { input: query, componentRestrictions: { country: 'my' }, sessionToken },
+      (predictions, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions || !predictions.length) {
+          showSuggestionMsg('No results (' + status + ')');
+          return;
+        }
+        const input = document.getElementById('delivery-addr');
+        const rect = input.getBoundingClientRect();
+        const list = document.getElementById('delivery-suggestions');
+        list.style.left   = rect.left + 'px';
+        list.style.top    = (rect.bottom + 4) + 'px';
+        list.style.width  = rect.width + 'px';
+        list.innerHTML = predictions.slice(0, 5).map(p =>
+          `<div class="delivery-suggestion" onclick="selectSuggestion('${p.place_id}','${p.description.replace(/'/g,"\\'")}')">
+            ${p.description}
+          </div>`
+        ).join('');
+        list.style.display = 'block';
       }
-      const input = document.getElementById('delivery-addr');
-      const rect = input.getBoundingClientRect();
-      const list = document.getElementById('delivery-suggestions');
-      list.style.left   = rect.left + 'px';
-      list.style.top    = (rect.bottom + 4) + 'px';
-      list.style.width  = rect.width + 'px';
-      list.innerHTML = predictions.slice(0, 5).map(p =>
-        `<div class="delivery-suggestion" onclick="selectSuggestion('${p.place_id}','${p.description.replace(/'/g,"\\'")}')">
-          ${p.description}
-        </div>`
-      ).join('');
-      list.style.display = 'block';
-    }
-  );
+    );
+  } catch(e) {
+    showSuggestionMsg('Error: ' + e.message);
+  }
 }
 
 function selectSuggestion(placeId, description) {
