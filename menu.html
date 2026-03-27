@@ -2016,7 +2016,6 @@ const CATEGORIES = [
           <input type="text" id="delivery-addr" class="delivery-addr-input"
             placeholder="Enter your full delivery address"
             autocomplete="off" spellcheck="false" oninput="onAddrInput(this.value)" />
-          <div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
         </div>
         <button class="delivery-quote-btn" id="delivery-quote-btn" onclick="getDeliveryQuote()">
           <i data-lucide="map-pin"></i> Get Delivery Quote
@@ -2032,6 +2031,9 @@ const CATEGORIES = [
     </button>
   </div>
 </div>
+
+<!-- Address suggestions — must be outside receipt panel (transform breaks position:fixed inside it) -->
+<div id="delivery-suggestions" class="delivery-suggestions" style="display:none"></div>
 
 <!-- ═══════════════════════════════════════ JS ═══ -->
 <script>
@@ -2059,7 +2061,6 @@ function ensureMapsReady() {
   if (window._mapsLoaded && window.google && window.google.maps && window.google.maps.places) {
     mapsReady = true;
     acService = new google.maps.places.AutocompleteService();
-    document.body.appendChild(document.getElementById('delivery-suggestions'));
     return true;
   }
   return false;
