@@ -1206,6 +1206,141 @@
     .receipt-send-btn:active { transform: scale(0.98); }
     .receipt-send-btn i { width: 18px; height: 18px; }
 
+    /* ─── DELIVERY SECTION ─── */
+    .delivery-section {
+      margin: 0 16px 12px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px 14px 10px;
+      border: 1.5px solid var(--border);
+    }
+
+    .delivery-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .delivery-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 0;
+    }
+
+    .delivery-opt {
+      flex: 1;
+      padding: 9px 8px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .delivery-opt i { width: 14px; height: 14px; }
+
+    .delivery-opt.active {
+      border-color: var(--brand);
+      color: var(--brand);
+      background: var(--brand-light);
+    }
+
+    .delivery-form {
+      margin-top: 12px;
+      display: none;
+    }
+
+    .delivery-addr-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      color: var(--text-primary);
+      outline: none;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
+    }
+
+    .delivery-addr-input::placeholder { color: var(--text-muted); }
+    .delivery-addr-input:focus { border-color: var(--brand); }
+
+    .delivery-quote-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .delivery-quote-btn:hover { background: #3a4e4d; }
+    .delivery-quote-btn i { width: 14px; height: 14px; }
+    .delivery-quote-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .delivery-result {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .delivery-result.success {
+      background: #f0faf4;
+      border: 1px solid #b7e8c8;
+    }
+
+    .delivery-result.error {
+      background: #fff2f2;
+      border: 1px solid #ffc4c4;
+      color: #c0392b;
+    }
+
+    .delivery-result-fee {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--brand);
+      margin-bottom: 3px;
+    }
+
+    .delivery-result-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 10px;
+    }
+
+    .delivery-result-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .delivery-result-meta i { width: 11px; height: 11px; }
+
     /* ─── OPTION SELECTORS ─── */
     .modal-options {
       margin-bottom: 16px;
@@ -1299,6 +1434,7 @@ const STORE = {
   instagram: "9palacecoffee",
   location: "One City, Subang Jaya",
   openHours: "9am – 10pm daily",
+  workerUrl: "WORKER_URL_PLACEHOLDER", // replace after deploying Cloudflare Worker
 }
 
 // Global options shown in the item modal for every item.
@@ -1833,6 +1969,27 @@ const CATEGORIES = [
       <div class="receipt-totals" id="receipt-totals"></div>
       <div class="receipt-note">Please review your order before sending.</div>
     </div>
+
+    <!-- Delivery method -->
+    <div class="delivery-section">
+      <div class="delivery-section-label">Delivery Method</div>
+      <div class="delivery-toggle">
+        <button class="delivery-opt active" id="btn-pickup" onclick="setDeliveryMode('pickup')">
+          <i data-lucide="store"></i> Self Pickup
+        </button>
+        <button class="delivery-opt" id="btn-delivery" onclick="setDeliveryMode('delivery')">
+          <i data-lucide="bike"></i> Delivery
+        </button>
+      </div>
+      <div class="delivery-form" id="delivery-form">
+        <input type="text" id="delivery-addr" class="delivery-addr-input"
+          placeholder="Enter your full delivery address" />
+        <button class="delivery-quote-btn" id="delivery-quote-btn" onclick="getDeliveryQuote()">
+          <i data-lucide="map-pin"></i> Get Delivery Quote
+        </button>
+        <div class="delivery-result" id="delivery-result"></div>
+      </div>
+    </div>
   </div>
   <div class="receipt-footer">
     <button class="receipt-send-btn" onclick="sendToWhatsApp()">
@@ -1849,6 +2006,10 @@ const cart = {};        // { cartKey: { item, qty, selections, unitPrice } }
 let activeModal = null; // current item shown in modal
 let modalQty = 1;
 let modalSelections = {}; // { optionId: choiceLabel }
+
+// Delivery state
+let deliveryMode = 'pickup'; // 'pickup' | 'delivery'
+let deliveryQuote = null;    // { price, priceFormatted, eta, distanceKm }
 
 /* ── Boot ── */
 function init() {
@@ -2166,17 +2327,52 @@ function cartCount() {
 }
 
 /* ── Receipt ── */
+function renderReceiptTotals() {
+  const subtotal = cartTotal();
+  const deliveryFee = (deliveryMode === 'delivery' && deliveryQuote) ? deliveryQuote.price : 0;
+  const grand = subtotal + deliveryFee;
+  let html = `
+    <div class="receipt-total-row">
+      <span class="receipt-total-label">Subtotal (${cartCount()} item${cartCount() !== 1 ? 's' : ''})</span>
+      <span class="receipt-total-val">${STORE.currency} ${fmt(subtotal)}</span>
+    </div>`;
+  if (deliveryFee > 0) {
+    html += `
+    <div class="receipt-total-row">
+      <span class="receipt-total-label">Delivery fee</span>
+      <span class="receipt-total-val">${STORE.currency} ${fmt(deliveryFee)}</span>
+    </div>`;
+  }
+  html += `
+    <div class="receipt-grand-row">
+      <span class="receipt-grand-label">Total</span>
+      <span class="receipt-grand-val">${STORE.currency} ${fmt(grand)}</span>
+    </div>`;
+  document.getElementById('receipt-totals').innerHTML = html;
+}
+
 function openReceipt() {
   closeCart();
 
-  // populate store name + datetime
+  // Reset delivery state
+  deliveryMode = 'pickup';
+  deliveryQuote = null;
+  document.getElementById('btn-pickup').classList.add('active');
+  document.getElementById('btn-delivery').classList.remove('active');
+  document.getElementById('delivery-form').style.display = 'none';
+  document.getElementById('delivery-addr').value = '';
+  const resultEl = document.getElementById('delivery-result');
+  resultEl.style.display = 'none';
+  resultEl.className = 'delivery-result';
+
+  // Store name + datetime
   document.getElementById('receipt-store-name').textContent = STORE.name;
   const now = new Date();
   document.getElementById('receipt-datetime').textContent =
     now.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) + '  ' +
     now.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
 
-  // items
+  // Items
   const entries = Object.values(cart);
   document.getElementById('receipt-items').innerHTML = entries.map(({ item, qty, selections, unitPrice }) => {
     const opts = selections && Object.keys(selections).length
@@ -2192,17 +2388,7 @@ function openReceipt() {
       </div>`;
   }).join('');
 
-  // totals
-  const subtotal = cartTotal();
-  document.getElementById('receipt-totals').innerHTML = `
-    <div class="receipt-total-row">
-      <span class="receipt-total-label">Subtotal (${cartCount()} item${cartCount() !== 1 ? 's' : ''})</span>
-      <span class="receipt-total-val">${STORE.currency} ${fmt(subtotal)}</span>
-    </div>
-    <div class="receipt-grand-row">
-      <span class="receipt-grand-label">Total</span>
-      <span class="receipt-grand-val">${STORE.currency} ${fmt(subtotal)}</span>
-    </div>`;
+  renderReceiptTotals();
 
   document.getElementById('receipt-overlay').classList.add('open');
   document.getElementById('receipt-panel').classList.add('open');
@@ -2214,15 +2400,94 @@ function closeReceipt() {
   document.getElementById('receipt-panel').classList.remove('open');
 }
 
+function setDeliveryMode(mode) {
+  deliveryMode = mode;
+  document.getElementById('btn-pickup').classList.toggle('active', mode === 'pickup');
+  document.getElementById('btn-delivery').classList.toggle('active', mode === 'delivery');
+  document.getElementById('delivery-form').style.display = mode === 'delivery' ? 'block' : 'none';
+  if (mode === 'pickup') {
+    deliveryQuote = null;
+    const resultEl = document.getElementById('delivery-result');
+    resultEl.style.display = 'none';
+    resultEl.className = 'delivery-result';
+    renderReceiptTotals();
+  }
+  lucide.createIcons();
+}
+
+async function getDeliveryQuote() {
+  const address = document.getElementById('delivery-addr').value.trim();
+  if (!address) {
+    document.getElementById('delivery-addr').focus();
+    return;
+  }
+
+  const btn = document.getElementById('delivery-quote-btn');
+  const resultEl = document.getElementById('delivery-result');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader"></i> Getting quote…';
+  resultEl.style.display = 'none';
+  resultEl.className = 'delivery-result';
+  lucide.createIcons();
+
+  try {
+    const res = await fetch(STORE.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address }),
+    });
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    deliveryQuote = data;
+    renderReceiptTotals();
+
+    resultEl.className = 'delivery-result success';
+    resultEl.innerHTML = `
+      <div class="delivery-result-fee">${data.priceFormatted}</div>
+      <div class="delivery-result-meta">
+        <span><i data-lucide="clock"></i> ${data.eta}</span>
+        <span><i data-lucide="map-pin"></i> ${data.distanceKm} km · ${data.serviceType}</span>
+      </div>`;
+    resultEl.style.display = 'block';
+
+  } catch (err) {
+    deliveryQuote = null;
+    renderReceiptTotals();
+    resultEl.className = 'delivery-result error';
+    resultEl.textContent = err.message || 'Could not get delivery quote. Please try again.';
+    resultEl.style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="map-pin"></i> Get Delivery Quote';
+  lucide.createIcons();
+}
+
 function sendToWhatsApp() {
   const lines = Object.values(cart).map(({ item, qty, selections, unitPrice }) => {
     const opts = selections && Object.keys(selections).length ? ` (${selectionsLabel(selections)})` : '';
     return `• ${item.name}${opts}\n  ${STORE.currency} ${fmt(unitPrice)} × ${qty} = ${STORE.currency} ${fmt(unitPrice * qty)}`;
   });
-  const total = cartTotal();
+  const subtotal = cartTotal();
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+
+  let deliveryLine = '';
+  let totalLine = '';
+
+  if (deliveryMode === 'delivery' && deliveryQuote) {
+    const addr = document.getElementById('delivery-addr').value.trim();
+    const grand = subtotal + deliveryQuote.price;
+    deliveryLine = `\nDelivery to: ${addr}\nDelivery fee: ${deliveryQuote.priceFormatted} (est. ${deliveryQuote.eta})\n`;
+    totalLine = `Subtotal: ${STORE.currency} ${fmt(subtotal)}\nDelivery: ${deliveryQuote.priceFormatted}\nTotal: *${STORE.currency} ${fmt(grand)}*`;
+  } else {
+    deliveryLine = '\nOrder type: Self Pickup\n';
+    totalLine = `Total: *${STORE.currency} ${fmt(subtotal)}*`;
+  }
+
   const msg =
 `==============================
 ORDER — ${STORE.name}
@@ -2230,9 +2495,9 @@ ${dateStr}, ${timeStr}
 ==============================
 
 ${lines.join('\n\n')}
-
+${deliveryLine}
 ------------------------------
-Total: *${STORE.currency} ${fmt(total)}*
+${totalLine}
 ==============================
 
 Please confirm my order. Thank you!`;

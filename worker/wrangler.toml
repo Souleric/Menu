@@ -1,0 +1,14 @@
+name = "9palace-delivery"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+LALAMOVE_BASE_URL = "https://sandbox-rest.lalamove.com"
+MARKET = "MY"
+STORE_LAT = "3.0468"
+STORE_LNG = "101.5813"
+STORE_ADDRESS = "Tower 1, The Square, Jalan USJ 25/1C, One City, 47650 Subang Jaya, Selangor"
+
+# Secrets — run these commands once after deploying:
+#   wrangler secret put LALAMOVE_API_KEY
+#   wrangler secret put LALAMOVE_API_SECRET
