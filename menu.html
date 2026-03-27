@@ -2052,10 +2052,6 @@ let acService = null;
 let sessionToken = null;
 let addrDebounceTimer = null;
 
-function onGoogleMapsReady() {
-  // overridden in <head> — this body version may never run due to async timing
-}
-
 function ensureMapsReady() {
   if (mapsReady) return true;
   if (window._mapsLoaded && window.google && window.google.maps && window.google.maps.places) {
