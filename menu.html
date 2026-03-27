@@ -8,7 +8,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady&loading=async" async defer></script>
+  <script>
+    // Define callback before Maps script loads so async execution order doesn't matter
+    window.onGoogleMapsReady = function() {
+      window._mapsLoaded = true;
+    };
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady" async defer></script>
   <style>
     /* Custom address suggestions dropdown — rendered on body, position:fixed */
     .delivery-addr-wrap { position: relative; }
@@ -2045,10 +2051,18 @@ let sessionToken = null;
 let addrDebounceTimer = null;
 
 function onGoogleMapsReady() {
-  mapsReady = true;
-  acService = new google.maps.places.AutocompleteService();
-  // Move suggestions out of receipt scroll so overflow:auto doesn't clip it
-  document.body.appendChild(document.getElementById('delivery-suggestions'));
+  // overridden in <head> — this body version may never run due to async timing
+}
+
+function ensureMapsReady() {
+  if (mapsReady) return true;
+  if (window._mapsLoaded && window.google && window.google.maps && window.google.maps.places) {
+    mapsReady = true;
+    acService = new google.maps.places.AutocompleteService();
+    document.body.appendChild(document.getElementById('delivery-suggestions'));
+    return true;
+  }
+  return false;
 }
 
 function onAddrInput(val) {
@@ -2059,7 +2073,7 @@ function onAddrInput(val) {
 }
 
 function fetchSuggestions(query) {
-  if (!mapsReady || !acService) return;
+  if (!ensureMapsReady()) return;
   if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
   acService.getPlacePredictions(
     { input: query, componentRestrictions: { country: 'my' }, sessionToken },
