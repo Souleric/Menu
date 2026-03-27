@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
   <style>
     /* Custom address suggestions dropdown — rendered on body, position:fixed */
     .delivery-addr-wrap { position: relative; }
@@ -1439,6 +1440,187 @@
       color: var(--text-muted);
       margin-top: 2px;
     }
+
+    /* ─── PAYMENT PANEL ─── */
+    .payment-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 240;
+      display: none;
+    }
+    .payment-overlay.open { display: block; }
+
+    .payment-panel {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--bg);
+      border-radius: 20px 20px 0 0;
+      z-index: 250;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .payment-panel.open { transform: translateY(0); }
+
+    @media (min-width: 520px) {
+      .payment-panel {
+        left: 50%; right: auto;
+        transform: translateX(-50%) translateY(100%);
+        width: 440px;
+        border-radius: 20px 20px 0 0;
+      }
+      .payment-panel.open { transform: translateX(-50%) translateY(0); }
+    }
+
+    .payment-panel-header {
+      padding: 16px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .payment-panel-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .payment-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px 28px;
+    }
+
+    .payment-amount-display {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .payment-amount-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .payment-amount-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--brand);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .payment-loading-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 32px 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .payment-loading-state i { width: 18px; height: 18px; }
+
+    .payment-error-msg {
+      background: #fff2f2;
+      border: 1px solid #ffc4c4;
+      color: #c0392b;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .pay-submit-btn {
+      width: 100%;
+      padding: 15px;
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 4px;
+    }
+
+    .pay-submit-btn:hover { background: #3a4e4d; }
+    .pay-submit-btn:active { transform: scale(0.98); }
+    .pay-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .pay-submit-btn i { width: 17px; height: 17px; }
+
+    .payment-success-state {
+      text-align: center;
+      padding: 16px 8px;
+    }
+
+    .payment-success-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: #f0faf4;
+      border: 2px solid #b7e8c8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .payment-success-icon i {
+      width: 36px;
+      height: 36px;
+      color: #27ae60;
+    }
+
+    .payment-success-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .payment-success-msg {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .receipt-pay-btn {
+      width: 100%;
+      padding: 15px;
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .receipt-pay-btn:hover { background: #3a4e4d; }
+    .receipt-pay-btn:active { transform: scale(0.98); }
+    .receipt-pay-btn i { width: 18px; height: 18px; }
   </style>
 </head>
 <body>
@@ -1458,6 +1640,7 @@ const STORE = {
   location: "One City, Subang Jaya",
   openHours: "9am – 10pm daily",
   workerUrl: "https://9palace-delivery.ericcheah2002.workers.dev",
+  stripePublishableKey: "pk_test_51TFTdrQoM2YIAcG6e9rxksXpet9AYl9ZtdHCDW9IfWoruPevVHu2NaLPfJmq5DMMLYATn2PHxJHaqpXws9985n2J00h4YiI74u",
 }
 
 // Global options shown in the item modal for every item.
@@ -2018,11 +2201,23 @@ const CATEGORIES = [
     </div>
   </div>
   <div class="receipt-footer">
-    <button class="receipt-send-btn" onclick="sendToWhatsApp()">
-      <i data-lucide="message-circle"></i>
-      Send Order via WhatsApp
+    <button class="receipt-pay-btn" onclick="openPaymentPanel()">
+      <i data-lucide="credit-card"></i>
+      Pay &amp; Confirm Order
     </button>
   </div>
+</div>
+
+<!-- Payment panel -->
+<div class="payment-overlay" id="payment-overlay" onclick="closePaymentPanel()"></div>
+<div class="payment-panel" id="payment-panel">
+  <div class="payment-panel-header">
+    <span class="payment-panel-title">Complete Payment</span>
+    <button class="icon-btn" style="background:var(--border);color:var(--text-primary)" onclick="closePaymentPanel()">
+      <i data-lucide="x"></i>
+    </button>
+  </div>
+  <div class="payment-panel-body" id="payment-panel-body"></div>
 </div>
 
 <!-- Address suggestions — must be outside receipt panel (transform breaks position:fixed inside it) -->
@@ -2131,6 +2326,7 @@ function init() {
   renderCategories();
   renderMenu(CATEGORIES);
   lucide.createIcons();
+  checkPaymentReturn();
 }
 
 /* ── Category nav ── */
@@ -2584,7 +2780,7 @@ async function getDeliveryQuote() {
   lucide.createIcons();
 }
 
-function sendToWhatsApp() {
+function sendToWhatsApp(paid = false) {
   const lines = Object.values(cart).map(({ item, qty, selections, unitPrice }) => {
     const opts = selections && Object.keys(selections).length ? ` (${selectionsLabel(selections)})` : '';
     return `• ${item.name}${opts}\n  ${STORE.currency} ${fmt(unitPrice)} × ${qty} = ${STORE.currency} ${fmt(unitPrice * qty)}`;
@@ -2607,6 +2803,7 @@ function sendToWhatsApp() {
     totalLine = `Total: *${STORE.currency} ${fmt(subtotal)}*`;
   }
 
+  const paidLine = paid ? '\nPAYMENT: Confirmed (paid online)\n' : '';
   const msg =
 `==============================
 ORDER — ${STORE.name}
@@ -2614,7 +2811,7 @@ ${dateStr}, ${timeStr}
 ==============================
 
 ${lines.join('\n\n')}
-${deliveryLine}
+${deliveryLine}${paidLine}
 ------------------------------
 ${totalLine}
 ==============================
@@ -2690,6 +2887,152 @@ function shareStore() {
 
 function openInstagram() {
   window.open(`https://instagram.com/${STORE.instagram}`, '_blank');
+}
+
+/* ── Payment ── */
+let stripeInstance = null;
+let stripeElements = null;
+let paymentGrand = 0;
+
+function getGrandTotal() {
+  const subtotal = cartTotal();
+  const fee = (deliveryMode === 'delivery' && deliveryQuote) ? deliveryQuote.price : 0;
+  return subtotal + fee;
+}
+
+async function openPaymentPanel() {
+  if (!stripeInstance) stripeInstance = Stripe(STORE.stripePublishableKey);
+
+  paymentGrand = getGrandTotal();
+  if (paymentGrand <= 0) return;
+
+  // Show panel with loading state
+  const body = document.getElementById('payment-panel-body');
+  body.innerHTML = `
+    <div class="payment-amount-display">
+      <span class="payment-amount-label">Total to pay</span>
+      <span class="payment-amount-value">${STORE.currency} ${fmt(paymentGrand)}</span>
+    </div>
+    <div class="payment-loading-state">
+      <i data-lucide="loader"></i>
+      <span>Preparing payment…</span>
+    </div>`;
+  document.getElementById('payment-overlay').classList.add('open');
+  document.getElementById('payment-panel').classList.add('open');
+  lucide.createIcons();
+
+  try {
+    const res = await fetch(STORE.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'create-payment-intent',
+        amountCents: Math.round(paymentGrand * 100),
+        description: `${STORE.name} Order`,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    stripeElements = stripeInstance.elements({
+      clientSecret: data.clientSecret,
+      appearance: { theme: 'stripe', variables: { colorPrimary: '#485F5E' } },
+    });
+    const paymentEl = stripeElements.create('payment');
+
+    body.innerHTML = `
+      <div class="payment-amount-display">
+        <span class="payment-amount-label">Total to pay</span>
+        <span class="payment-amount-value">${STORE.currency} ${fmt(paymentGrand)}</span>
+      </div>
+      <div id="stripe-payment-element" style="margin-bottom:16px"></div>
+      <div id="payment-error-msg" class="payment-error-msg" style="display:none"></div>
+      <button class="pay-submit-btn" id="pay-submit-btn" onclick="submitPayment()">
+        <i data-lucide="lock"></i>
+        Pay ${STORE.currency} ${fmt(paymentGrand)}
+      </button>`;
+    lucide.createIcons();
+    paymentEl.mount('#stripe-payment-element');
+
+  } catch (e) {
+    body.innerHTML = `
+      <div class="payment-error-msg" style="display:block">${e.message}</div>
+      <button class="pay-submit-btn" onclick="openPaymentPanel()">
+        <i data-lucide="refresh-cw"></i> Try Again
+      </button>`;
+    lucide.createIcons();
+  }
+}
+
+async function submitPayment() {
+  const btn = document.getElementById('pay-submit-btn');
+  const errEl = document.getElementById('payment-error-msg');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader"></i> Processing…';
+  lucide.createIcons();
+  errEl.style.display = 'none';
+
+  const returnUrl = window.location.href.split('?')[0] + '?payment_return=1';
+  const { error, paymentIntent } = await stripeInstance.confirmPayment({
+    elements: stripeElements,
+    confirmParams: { return_url: returnUrl },
+    redirect: 'if_required',
+  });
+
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="lock"></i> Pay ${STORE.currency} ${fmt(paymentGrand)}`;
+    lucide.createIcons();
+    return;
+  }
+
+  if (paymentIntent && paymentIntent.status === 'succeeded') {
+    showPaymentSuccess();
+  }
+}
+
+function showPaymentSuccess() {
+  const body = document.getElementById('payment-panel-body');
+  body.innerHTML = `
+    <div class="payment-success-state">
+      <div class="payment-success-icon"><i data-lucide="check-circle"></i></div>
+      <div class="payment-success-title">Payment Successful</div>
+      <div class="payment-success-msg">
+        ${STORE.currency} ${fmt(paymentGrand)} received.<br>
+        Send your order details to the store now.
+      </div>
+      <button class="pay-submit-btn" onclick="sendToWhatsApp(true); closePaymentPanel();">
+        <i data-lucide="message-circle"></i>
+        Send Order to Store
+      </button>
+    </div>`;
+  lucide.createIcons();
+}
+
+function closePaymentPanel() {
+  document.getElementById('payment-overlay').classList.remove('open');
+  document.getElementById('payment-panel').classList.remove('open');
+  stripeElements = null;
+}
+
+function checkPaymentReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const clientSecret = params.get('payment_intent_client_secret');
+  if (!clientSecret) return;
+  if (!stripeInstance) stripeInstance = Stripe(STORE.stripePublishableKey);
+  // Clean URL
+  history.replaceState({}, '', window.location.pathname);
+  stripeInstance.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+    if (paymentIntent && paymentIntent.status === 'succeeded') {
+      paymentGrand = paymentIntent.amount / 100;
+      // Show panel in success state (cart may be cleared after redirect)
+      document.getElementById('payment-overlay').classList.add('open');
+      document.getElementById('payment-panel').classList.add('open');
+      showPaymentSuccess();
+    }
+  });
 }
 
 /* ── Util ── */

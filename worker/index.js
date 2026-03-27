@@ -69,6 +69,31 @@ async function handlePlaceDetails(body, env) {
   });
 }
 
+// ── Stripe Payment Intent ───────────────────────────────────────────────────
+async function handleCreatePaymentIntent(body, env) {
+  const { amountCents, description } = body;
+  if (!amountCents || amountCents < 100) return json({ error: 'Invalid amount' }, 400);
+
+  const params = new URLSearchParams({
+    amount: Math.round(amountCents).toString(),
+    currency: 'myr',
+    'automatic_payment_methods[enabled]': 'true',
+  });
+  if (description) params.set('description', description);
+
+  const res = await fetch('https://api.stripe.com/v1/payment_intents', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+  const data = await res.json();
+  if (!res.ok) return json({ error: data.error?.message || 'Stripe error' }, 400);
+  return json({ clientSecret: data.client_secret });
+}
+
 // ── Lalamove Delivery Quote ─────────────────────────────────────────────────
 async function handleQuote(body, env) {
   const { address, lat, lng } = body;
@@ -78,16 +103,22 @@ async function handleQuote(body, env) {
   const dropLng = parseFloat(lng).toFixed(6);
   const path = '/v3/quotations';
   const timestamp = Date.now().toString();
-  const scheduleAt = new Date(Date.now() + 5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '+00:00');
 
   const bodyObj = {
-    serviceType: 'MOTORCYCLE',
-    language: 'en_MY',
-    scheduleAt,
-    stops: [
-      { coordinates: { lat: env.STORE_LAT, lng: env.STORE_LNG }, address: env.STORE_ADDRESS },
-      { coordinates: { lat: dropLat, lng: dropLng }, address },
-    ],
+    data: {
+      serviceType: 'MOTORCYCLE',
+      language: 'en_MY',
+      stops: [
+        {
+          coordinates: { lat: env.STORE_LAT, lng: env.STORE_LNG },
+          address: env.STORE_ADDRESS,
+        },
+        {
+          coordinates: { lat: dropLat, lng: dropLng },
+          address,
+        },
+      ],
+    },
   };
   const bodyStr = JSON.stringify(bodyObj);
   const signature = await hmacSign(env.LALAMOVE_API_SECRET, 'POST', path, bodyStr, timestamp);
@@ -102,12 +133,13 @@ async function handleQuote(body, env) {
     },
     body: bodyStr,
   });
-  const llData = await llRes.json();
+  const llText = await llRes.text();
+  let llData;
+  try { llData = JSON.parse(llText); } catch { throw new Error(`Lalamove raw error: ${llText}`); }
   if (!llRes.ok) throw new Error(llData?.message || llData?.details?.[0]?.message || JSON.stringify(llData));
 
-  const totalCents = parseInt(llData.priceBreakdown?.total || 0);
-  const price = totalCents / 100;
-  const distanceM = parseInt(llData.distance?.value || 0);
+  const price = parseFloat(llData.data?.priceBreakdown?.total || 0);
+  const distanceM = parseInt(llData.data?.distance?.value || 0);
   const etaMin = Math.ceil(distanceM / 500) + 10;
   const distanceKm = (distanceM / 1000).toFixed(1);
 
@@ -130,9 +162,10 @@ export default {
     try {
       const body = await request.json();
       const type = body.type;
-      if (type === 'autocomplete')   return await handleAutocomplete(body, env);
-      if (type === 'place-details')  return await handlePlaceDetails(body, env);
-      if (type === 'quote')          return await handleQuote(body, env);
+      if (type === 'autocomplete')          return await handleAutocomplete(body, env);
+      if (type === 'place-details')         return await handlePlaceDetails(body, env);
+      if (type === 'quote')                 return await handleQuote(body, env);
+      if (type === 'create-payment-intent') return await handleCreatePaymentIntent(body, env);
       return json({ error: 'Unknown request type' }, 400);
     } catch (err) {
       return json({ error: err.message }, 400);
