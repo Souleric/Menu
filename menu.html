@@ -10,20 +10,16 @@
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady&loading=async" async defer></script>
   <style>
-    /* Custom address suggestions dropdown */
-    .delivery-addr-wrap {
-      position: relative;
-    }
+    /* Custom address suggestions dropdown — rendered on body, position:fixed */
+    .delivery-addr-wrap { position: relative; }
     .delivery-suggestions {
-      position: absolute;
-      left: 0; right: 0;
-      top: calc(100% + 4px);
+      position: fixed;
       background: #fff;
       border: 1.5px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      z-index: 9999;
+      z-index: 99999;
     }
     .delivery-suggestion {
       padding: 11px 12px;
@@ -2051,6 +2047,8 @@ let addrDebounceTimer = null;
 function onGoogleMapsReady() {
   mapsReady = true;
   acService = new google.maps.places.AutocompleteService();
+  // Move suggestions out of receipt scroll so overflow:auto doesn't clip it
+  document.body.appendChild(document.getElementById('delivery-suggestions'));
 }
 
 function onAddrInput(val) {
@@ -2069,7 +2067,12 @@ function fetchSuggestions(query) {
       if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
         hideSuggestions(); return;
       }
+      const input = document.getElementById('delivery-addr');
+      const rect = input.getBoundingClientRect();
       const list = document.getElementById('delivery-suggestions');
+      list.style.left   = rect.left + 'px';
+      list.style.top    = (rect.bottom + 4) + 'px';
+      list.style.width  = rect.width + 'px';
       list.innerHTML = predictions.slice(0, 5).map(p =>
         `<div class="delivery-suggestion" onclick="selectSuggestion('${p.place_id}','${p.description.replace(/'/g,"\\'")}')">
           ${p.description}
