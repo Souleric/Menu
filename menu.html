@@ -8,13 +8,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
-  <script>
-    // Define callback before Maps script loads so async execution order doesn't matter
-    window.onGoogleMapsReady = function() {
-      window._mapsLoaded = true;
-    };
-  </script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnWGcDA68-SI0iKbovH7hbBka6WHFd-zo&libraries=places&callback=onGoogleMapsReady" async defer></script>
   <style>
     /* Custom address suggestions dropdown — rendered on body, position:fixed */
     .delivery-addr-wrap { position: relative; }
@@ -2046,31 +2039,14 @@ let modalSelections = {}; // { optionId: choiceLabel }
 // Delivery state
 let deliveryMode = 'pickup'; // 'pickup' | 'delivery'
 let deliveryQuote = null;    // { price, priceFormatted, eta, distanceKm }
-let deliveryCoords = null;   // { lat, lng } from Google Places
-let mapsReady = false;
-let acService = null;
-let sessionToken = null;
+let deliveryCoords = null;
 let addrDebounceTimer = null;
-
-function ensureMapsReady() {
-  if (mapsReady) return true;
-  if (window._mapsLoaded && window.google && window.google.maps && window.google.maps.places) {
-    mapsReady = true;
-    acService = new google.maps.places.AutocompleteService();
-    return true;
-  }
-  return false;
-}
 
 function onAddrInput(val) {
   clearTimeout(addrDebounceTimer);
   deliveryCoords = null;
   if (val.trim().length < 3) { hideSuggestions(); return; }
-  if (!ensureMapsReady()) {
-    showSuggestionMsg('Maps not ready yet — try again in a moment.');
-    return;
-  }
-  addrDebounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 350);
+  addrDebounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 400);
 }
 
 function showSuggestionMsg(msg) {
@@ -2080,61 +2056,54 @@ function showSuggestionMsg(msg) {
   list.style.left  = rect.left + 'px';
   list.style.top   = (rect.bottom + 4) + 'px';
   list.style.width = rect.width + 'px';
-  list.innerHTML = `<div class="delivery-suggestion" style="color:var(--text-muted)">${msg}</div>`;
+  list.innerHTML = `<div class="delivery-suggestion" style="color:var(--text-muted);font-style:italic">${msg}</div>`;
   list.style.display = 'block';
 }
 
-function fetchSuggestions(query) {
-  if (!ensureMapsReady()) {
-    showSuggestionMsg('Maps not ready — try again.');
-    return;
-  }
+async function fetchSuggestions(query) {
+  showSuggestionMsg('Searching…');
   try {
-    if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
-    showSuggestionMsg('Searching…');
-    acService.getPlacePredictions(
-      { input: query, componentRestrictions: { country: 'my' }, sessionToken },
-      (predictions, status) => {
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions || !predictions.length) {
-          showSuggestionMsg('No results (' + status + ')');
-          return;
-        }
-        const input = document.getElementById('delivery-addr');
-        const rect = input.getBoundingClientRect();
-        const list = document.getElementById('delivery-suggestions');
-        list.style.left   = rect.left + 'px';
-        list.style.top    = (rect.bottom + 4) + 'px';
-        list.style.width  = rect.width + 'px';
-        list.innerHTML = predictions.slice(0, 5).map(p =>
-          `<div class="delivery-suggestion" onclick="selectSuggestion('${p.place_id}','${p.description.replace(/'/g,"\\'")}')">
-            ${p.description}
-          </div>`
-        ).join('');
-        list.style.display = 'block';
-      }
-    );
+    const res = await fetch(STORE.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'autocomplete', query }),
+    });
+    const data = await res.json();
+    if (data.error) { showSuggestionMsg(data.error); return; }
+    if (!data.suggestions || !data.suggestions.length) { showSuggestionMsg('No results found.'); return; }
+
+    const input = document.getElementById('delivery-addr');
+    const rect = input.getBoundingClientRect();
+    const list = document.getElementById('delivery-suggestions');
+    list.style.left  = rect.left + 'px';
+    list.style.top   = (rect.bottom + 4) + 'px';
+    list.style.width = rect.width + 'px';
+    list.innerHTML = data.suggestions.map(s =>
+      `<div class="delivery-suggestion" onclick="selectSuggestion('${s.placeId}','${s.description.replace(/'/g,"\\'")}')">
+        ${s.description}
+      </div>`
+    ).join('');
+    list.style.display = 'block';
   } catch(e) {
     showSuggestionMsg('Error: ' + e.message);
   }
 }
 
-function selectSuggestion(placeId, description) {
+async function selectSuggestion(placeId, description) {
   hideSuggestions();
   document.getElementById('delivery-addr').value = description;
-  const svc = new google.maps.places.PlacesService(document.createElement('div'));
-  svc.getDetails(
-    { placeId, fields: ['geometry', 'formatted_address'], sessionToken },
-    (place, status) => {
-      sessionToken = null;
-      if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry) {
-        deliveryCoords = {
-          lat: place.geometry.location.lat().toFixed(6),
-          lng: place.geometry.location.lng().toFixed(6),
-        };
-        document.getElementById('delivery-addr').value = place.formatted_address;
-      }
+  try {
+    const res = await fetch(STORE.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'place-details', placeId }),
+    });
+    const data = await res.json();
+    if (data.lat && data.lng) {
+      deliveryCoords = { lat: data.lat, lng: data.lng };
+      document.getElementById('delivery-addr').value = data.address;
     }
-  );
+  } catch(e) { /* coords stay null */ }
 }
 
 function hideSuggestions() {
@@ -2143,7 +2112,7 @@ function hideSuggestions() {
   list.innerHTML = '';
 }
 
-function initAutocomplete() { /* no-op — service initialized in onGoogleMapsReady */ }
+function initAutocomplete() { /* no-op */ }
 
 /* ── Boot ── */
 function init() {
@@ -2584,7 +2553,7 @@ async function getDeliveryQuote() {
     const res = await fetch(STORE.workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, lat: deliveryCoords.lat, lng: deliveryCoords.lng }),
+      body: JSON.stringify({ type: 'quote', address, lat: deliveryCoords.lat, lng: deliveryCoords.lng }),
     });
     const data = await res.json();
 

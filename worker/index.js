@@ -4,123 +4,138 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}
+
 async function hmacSign(secret, method, path, body, timestamp) {
-  const message = `${timestamp}\r\n${method.toUpperCase()}\r\n${path}\r\n\r\n${body}`;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false, ['sign']
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   );
+  const message = `${timestamp}\r\n${method.toUpperCase()}\r\n${path}\r\n\r\n${body}`;
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function geocode(address) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=my`;
-  const res = await fetch(url, { headers: { 'User-Agent': '9PalaceCoffeeMenu/1.0' } });
+// ── Google Places Autocomplete ──────────────────────────────────────────────
+async function handleAutocomplete(body, env) {
+  const { query } = body;
+  if (!query || query.trim().length < 2) return json({ suggestions: [] });
+
+  const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
+  url.searchParams.set('input', query.trim());
+  url.searchParams.set('components', 'country:my');
+  url.searchParams.set('language', 'en');
+  url.searchParams.set('key', env.GOOGLE_MAPS_API_KEY);
+
+  const res = await fetch(url.toString());
   const data = await res.json();
-  if (!data.length) throw new Error('Address not found. Please enter a more specific address.');
-  return { lat: String(data[0].lat), lng: String(data[0].lon) };
+
+  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    return json({ error: `Places API: ${data.status}` }, 400);
+  }
+
+  const suggestions = (data.predictions || []).slice(0, 5).map(p => ({
+    placeId: p.place_id,
+    description: p.description,
+  }));
+  return json({ suggestions });
 }
 
+// ── Google Place Details (coordinates) ─────────────────────────────────────
+async function handlePlaceDetails(body, env) {
+  const { placeId } = body;
+  if (!placeId) return json({ error: 'placeId required' }, 400);
+
+  const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+  url.searchParams.set('place_id', placeId);
+  url.searchParams.set('fields', 'formatted_address,geometry');
+  url.searchParams.set('key', env.GOOGLE_MAPS_API_KEY);
+
+  const res = await fetch(url.toString());
+  const data = await res.json();
+
+  if (data.status !== 'OK') return json({ error: `Place Details: ${data.status}` }, 400);
+
+  const loc = data.result.geometry.location;
+  return json({
+    address: data.result.formatted_address,
+    lat: loc.lat.toFixed(6),
+    lng: loc.lng.toFixed(6),
+  });
+}
+
+// ── Lalamove Delivery Quote ─────────────────────────────────────────────────
+async function handleQuote(body, env) {
+  const { address, lat, lng } = body;
+  if (!address || !lat || !lng) return json({ error: 'address, lat and lng are required' }, 400);
+
+  const dropLat = parseFloat(lat).toFixed(6);
+  const dropLng = parseFloat(lng).toFixed(6);
+  const path = '/v3/quotations';
+  const timestamp = Date.now().toString();
+  const scheduleAt = new Date(Date.now() + 5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '+00:00');
+
+  const bodyObj = {
+    serviceType: 'MOTORCYCLE',
+    language: 'en_MY',
+    scheduleAt,
+    stops: [
+      { coordinates: { lat: env.STORE_LAT, lng: env.STORE_LNG }, address: env.STORE_ADDRESS },
+      { coordinates: { lat: dropLat, lng: dropLng }, address },
+    ],
+  };
+  const bodyStr = JSON.stringify(bodyObj);
+  const signature = await hmacSign(env.LALAMOVE_API_SECRET, 'POST', path, bodyStr, timestamp);
+
+  const llRes = await fetch(`${env.LALAMOVE_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `hmac ${env.LALAMOVE_API_KEY}:${timestamp}:${signature}`,
+      'Market': env.MARKET,
+      'Request-ID': crypto.randomUUID(),
+    },
+    body: bodyStr,
+  });
+  const llData = await llRes.json();
+  if (!llRes.ok) throw new Error(llData?.message || llData?.details?.[0]?.message || JSON.stringify(llData));
+
+  const totalCents = parseInt(llData.priceBreakdown?.total || 0);
+  const price = totalCents / 100;
+  const distanceM = parseInt(llData.distance?.value || 0);
+  const etaMin = Math.ceil(distanceM / 500) + 10;
+  const distanceKm = (distanceM / 1000).toFixed(1);
+
+  return json({
+    price,
+    priceFormatted: `RM ${price.toFixed(2)}`,
+    eta: `${etaMin}–${etaMin + 15} min`,
+    distanceKm,
+    currency: 'MYR',
+    serviceType: 'Motorcycle',
+  });
+}
+
+// ── Router ──────────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
-    }
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405, headers: CORS });
-    }
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
     try {
-      const { address, lat, lng } = await request.json();
-      if (!address || address.trim().length < 5) {
-        throw new Error('Please enter a valid delivery address.');
-      }
-
-      // Use provided coordinates (from Google Places) or fall back to geocoding
-      let dropLat, dropLng;
-      if (lat && lng) {
-        dropLat = parseFloat(lat).toFixed(6);
-        dropLng = parseFloat(lng).toFixed(6);
-      } else {
-        const coords = await geocode(address.trim());
-        dropLat = parseFloat(coords.lat).toFixed(6);
-        dropLng = parseFloat(coords.lng).toFixed(6);
-      }
-
-      const path = '/v3/quotations';
-      const timestamp = Date.now().toString();
-      // scheduleAt must be a future RFC3339 time (5 min from now)
-      const scheduleAt = new Date(Date.now() + 5 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '+00:00');
-
-      const bodyObj = {
-        serviceType: 'MOTORCYCLE',
-        language: 'en_MY',
-        scheduleAt,
-        stops: [
-          {
-            coordinates: { lat: env.STORE_LAT, lng: env.STORE_LNG },
-            address: env.STORE_ADDRESS,
-          },
-          {
-            coordinates: { lat: dropLat, lng: dropLng },
-            address: address.trim(),
-          },
-        ],
-      };
-      const bodyStr = JSON.stringify(bodyObj);
-      const signature = await hmacSign(env.LALAMOVE_API_SECRET, 'POST', path, bodyStr, timestamp);
-
-      const llRes = await fetch(`${env.LALAMOVE_BASE_URL}${path}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `hmac ${env.LALAMOVE_API_KEY}:${timestamp}:${signature}`,
-          'Market': env.MARKET,
-          'Request-ID': crypto.randomUUID(),
-        },
-        body: bodyStr,
-      });
-
-      const llData = await llRes.json();
-
-      if (!llRes.ok) {
-        // Return full error detail for easier debugging
-        const errMsg = llData?.message || llData?.details?.[0]?.message || JSON.stringify(llData);
-        throw new Error(errMsg);
-      }
-
-      // Price is in cents (e.g. 900 = RM 9.00)
-      const totalCents = parseInt(llData.priceBreakdown?.total || 0);
-      const price = totalCents / 100;
-      const priceFormatted = `RM ${price.toFixed(2)}`;
-
-      // ETA estimate based on distance (motorcycle ~30 km/h + 10 min handling)
-      const distanceM = parseInt(llData.distance?.value || 0);
-      const travelMin = Math.ceil(distanceM / 500); // 500 m/min = 30 km/h
-      const etaMin = travelMin + 10;
-      const etaMax = etaMin + 15;
-      const eta = `${etaMin}–${etaMax} min`;
-      const distanceKm = (distanceM / 1000).toFixed(1);
-
-      return new Response(JSON.stringify({
-        price,
-        priceFormatted,
-        eta,
-        distanceKm,
-        currency: 'MYR',
-        serviceType: 'Motorcycle',
-      }), {
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-
+      const body = await request.json();
+      const type = body.type;
+      if (type === 'autocomplete')   return await handleAutocomplete(body, env);
+      if (type === 'place-details')  return await handlePlaceDetails(body, env);
+      if (type === 'quote')          return await handleQuote(body, env);
+      return json({ error: 'Unknown request type' }, 400);
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return json({ error: err.message }, 400);
     }
   }
 };
