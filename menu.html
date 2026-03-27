@@ -2067,19 +2067,38 @@ function ensureMapsReady() {
 
 function onAddrInput(val) {
   clearTimeout(addrDebounceTimer);
-  deliveryCoords = null; // clear coords when user edits
+  deliveryCoords = null;
   if (val.trim().length < 3) { hideSuggestions(); return; }
+  if (!ensureMapsReady()) {
+    showSuggestionMsg('Maps not ready yet — try again in a moment.');
+    return;
+  }
   addrDebounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 350);
 }
 
+function showSuggestionMsg(msg) {
+  const input = document.getElementById('delivery-addr');
+  const rect = input.getBoundingClientRect();
+  const list = document.getElementById('delivery-suggestions');
+  list.style.left  = rect.left + 'px';
+  list.style.top   = (rect.bottom + 4) + 'px';
+  list.style.width = rect.width + 'px';
+  list.innerHTML = `<div class="delivery-suggestion" style="color:var(--text-muted)">${msg}</div>`;
+  list.style.display = 'block';
+}
+
 function fetchSuggestions(query) {
-  if (!ensureMapsReady()) return;
+  if (!ensureMapsReady()) {
+    showSuggestionMsg('Maps not ready — try again.');
+    return;
+  }
   if (!sessionToken) sessionToken = new google.maps.places.AutocompleteSessionToken();
   acService.getPlacePredictions(
     { input: query, componentRestrictions: { country: 'my' }, sessionToken },
     (predictions, status) => {
       if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
-        hideSuggestions(); return;
+        showSuggestionMsg('No results (' + status + '). Check Places API is enabled + billing active.');
+        return;
       }
       const input = document.getElementById('delivery-addr');
       const rect = input.getBoundingClientRect();
